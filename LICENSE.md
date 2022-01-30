@@ -1,4 +1,4 @@
-Copyright (c) 2021 Nathaniel Aquino. All rights reserved.
+Copyright (c) 2022 Nathaniel Aquino. All rights reserved.
 
 # Attribution-NonCommercial-NoDerivatives 4.0 International
 
