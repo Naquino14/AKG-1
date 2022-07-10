@@ -4,7 +4,7 @@ using System.Buffers.Binary;
 
 namespace ADIS
 {
-    public class AKG1
+    public static class AKG1
     {
         /// ppl reading this must think im crazy or someth
         /// so, heres a disclaimer:
@@ -102,23 +102,24 @@ namespace ADIS
         /// https://www.desmos.com/calculator/xnv1ng9lz4
         /// I can already tell its gonna be slow asf but i just want to get a working model for now
         /// as a side note im prob also not gonna bother with regions
+        /// 
+        /// Small update, to try to grasp the idea of public key cryptography,
+        /// I have decided to implement a very basic diffie - hellman exchange first.
 
         public struct PublicKey
         {
-            public int mod; 
-            public float exponent; 
-            public byte salt; 
-            public int[] poly1Coefs; 
-            public int[] poly2Coefs;
+            #region expirimental
+            //public int mod; 
+            //public float exponent; 
+            //public byte salt; 
+            //public int[] poly1Coefs; 
+            //public int[] poly2Coefs;
+            #endregion
+            public int _modulus;
+            public int _base;
         }
 
-        public byte[] MixSecrets()
-        {
-            // this is Pf(x) on desmos
-            throw new NotImplementedException();
-        }
-
-        private byte[] GetSharedSecret(byte[] pmKey)
+        private static byte[] GetSharedSecret(byte[] pmKey)
         {
             throw new NotImplementedException();
         }
@@ -133,38 +134,97 @@ namespace ADIS
             return result;
         }
 
-        public static PublicKey DeMarshalPublicKey(byte[] incoming)
+        public static PublicKey DeMarshalPublicKey(byte[] incoming) // todo: new structure :(
         {
             var key = new PublicKey();
-            key.mod = B2I(incoming[0], incoming[1], incoming[2], incoming[3]);
-            key.exponent = B2F(in incoming);
-            key.salt = incoming[8];
-            key.poly1Coefs = new int[] // its 11 pm i cant be bothered to toss this in a loop rn
+            #region expiremental
+            //key.mod = B2I(incoming[0], incoming[1], incoming[2], incoming[3]);
+            //key.exponent = B2F(in incoming);
+            //key.salt = incoming[8];
+            //key.poly1Coefs = new int[] // its 11 pm i cant be bothered to toss this in a loop rn
+            //{
+            //    B2I(incoming[9], incoming[10], incoming[11], incoming[12]),
+            //    B2I(incoming[13], incoming[14], incoming[15], incoming[16]),
+            //    B2I(incoming[17], incoming[18], incoming[19], incoming[20]),
+            //    B2I(incoming[21], incoming[22], incoming[23], incoming[24])
+            //};
+            //key.poly2Coefs = new int[]
+            //{
+            //    B2I(incoming[25], incoming[26], incoming[27], incoming[28]),
+            //    B2I(incoming[29], incoming[30], incoming[31], incoming[32]),
+            //    B2I(incoming[33], incoming[34], incoming[35], incoming[36]),
+            //    B2I(incoming[37], incoming[38], incoming[39], incoming[40])
+            //};
+            #endregion
+            try
             {
-                B2I(incoming[9], incoming[10], incoming[11], incoming[12]),
-                B2I(incoming[13], incoming[14], incoming[15], incoming[16]),
-                B2I(incoming[17], incoming[18], incoming[19], incoming[20]),
-                B2I(incoming[21], incoming[22], incoming[23], incoming[24])
-            };
-            key.poly2Coefs = new int[]
-            {
-                B2I(incoming[25], incoming[26], incoming[27], incoming[28]),
-                B2I(incoming[29], incoming[30], incoming[31], incoming[32]),
-                B2I(incoming[33], incoming[34], incoming[35], incoming[36]),
-                B2I(incoming[37], incoming[38], incoming[39], incoming[40])
-            };
+                key._modulus = B2I(incoming[0], incoming[1], incoming[2], incoming[3]);
+                key._base = B2I(incoming[4], incoming[5], incoming[6], incoming[7]);
+            } catch (Exception ex)
+            { throw new InvalidKeyStreamException(ex.Message, ex); }
             return key;
         }
 
         public static byte[] MarshalPublicKey(PublicKey key)
         {
+            var buf = new byte[8];
+            var m = I2B(key._modulus);
+            var b = I2B(key._base);
+            for (int i = 0; i < m.Length; i++)
+            {
+                buf[i] = m[i];
+                buf[i + 4] = b[i];
+            }
+            return buf;
+        }
+
+        public static PublicKey ComputePublicKey(int seed = 1)
+        {
+            
             throw new NotImplementedException();
         }
 
-        public static PublicKey GeneratePublicKey(int seed = 1)
+        public static PublicKey GenerateKey()
         {
-            seed = (seed == 0) ? seed++ : seed;
-            throw new NotImplementedException();
+            c.WriteLine("Generating key...");
+            Random random = new Random();
+            var res = new PublicKey();
+            for (;;)
+            {
+                int ctx = random.Next(1073741823, 2147483647);
+                if (IsPrime(ctx))
+                {
+                    for(;;)
+                    {
+                        int primRoot = random.Next(1073741823, 2147483647);
+                        if (PMMN(ctx, primRoot))
+                        {
+                            res._modulus = ctx;
+                            res._base = primRoot;
+                            return res;
+                        }
+                    }
+                }
+            }
+        }
+
+        public static bool PMMN(int p, int r)
+        {
+            var res = new int[p];
+            for (int i = 1; i <= p - 1; i++)
+                res[i - 1] = EBSMK(r, i, p);
+            if (res.GroupBy(x => x).Any(g => g.Count() > 1))
+                return false;
+            else
+                return true;
+        }
+
+        public static bool IsPrime(int n)
+        {
+            var res = n >= 2 && (n % 2 == 0) && (n == 2);
+            for (int i = 3; i <= (int)MathF.Sqrt(n); i += 2)
+                res = !(n % i == 0);
+            return res;
         }
 
         /// <summary>
@@ -198,5 +258,12 @@ namespace ADIS
 
         public static byte[] I2B(int a)
         { return BitConverter.GetBytes(a); }
+    }
+
+    public class InvalidKeyStreamException : Exception
+    {
+        public InvalidKeyStreamException() { }
+        public InvalidKeyStreamException(string msg) : base(msg) { }
+        public InvalidKeyStreamException(string msg, Exception inner) : base(msg, inner) { }
     }
 }
